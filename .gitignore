@@ -1,0 +1,22 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+docs
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Local/generated data
+data/uploads/
+data/vector_db/
+data/processed/
+src/corpus_builder/exp/output/
+tmp/
+
+# Raw source documents: keep provenance in docs/STANDARDS.md
+data/raw/
+
+# Logs
+*.log
