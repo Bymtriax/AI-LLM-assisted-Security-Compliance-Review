@@ -17,7 +17,7 @@ from pathlib import Path
 from pypdf import PdfReader
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SOURCE_PDF = PROJECT_ROOT / "data/raw/standards/en/S17_EN_v8.2_2025-04.pdf"
 EXPERIMENT_OUTPUT_DIR = Path(__file__).resolve().parent / "output"
 OUTPUT_JSONL = EXPERIMENT_OUTPUT_DIR / "s17_en_retrieval_chunks_v2.jsonl"

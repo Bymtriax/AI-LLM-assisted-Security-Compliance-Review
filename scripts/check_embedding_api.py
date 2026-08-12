@@ -4,18 +4,23 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+from dotenv import load_dotenv
 
 
 API_URL = "https://api.siliconflow.cn/v1/embeddings"
 MODEL = "Qwen/Qwen3-VL-Embedding-8B"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> None:
+    load_dotenv(PROJECT_ROOT / ".env")
     api_key = os.environ.get("SILICONFLOW_API_KEY")
     if not api_key:
-        raise SystemExit("Set SILICONFLOW_API_KEY before running this script.")
+        raise SystemExit("Set SILICONFLOW_API_KEY in the project's .env file before running this script.")
 
     request = Request(
         API_URL,

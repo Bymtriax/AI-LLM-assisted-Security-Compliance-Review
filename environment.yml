@@ -7,3 +7,7 @@ dependencies:
   - python=3.12
   - pip
   - pypdf
+  - python-dotenv
+  - pytest
+  - pip:
+      - "chromadb>=1.0,<2.0"

@@ -12,7 +12,7 @@ __pycache__/
 data/uploads/
 data/vector_db/
 data/processed/
-src/corpus_builder/exp/output/
+exp/output/
 tmp/
 
 # Raw source documents: keep provenance in docs/STANDARDS.md
