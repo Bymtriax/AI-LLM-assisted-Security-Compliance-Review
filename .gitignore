@@ -8,9 +8,6 @@ __pycache__/
 *.py[cod]
 
 # Local/generated data
-data/uploads/
-data/vector_db/
-data/processed/
 exp/output/
 tmp/
 

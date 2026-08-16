@@ -122,6 +122,17 @@
 
 ## 更新格式
 
+### 2026-08-16 — 正式 S17 处理程序
+
+- 新增 `src/corpus_builder/handle_s17.py`，负责读取完整英文 S17 PDF，并按条例结构生成可直接写入 vector store 的 records；
+- 正式输出格式为 `id`、`text` 和 `metadata`，metadata 保存章节、版本、语言、页码、来源和切分追踪信息；
+- embedding API 输入决定简化为纯 `text` 数组，其他信息不参与 embedding；
+- `main()` 调用已有 `embedded_api.embed_texts()` 和 `vector_store.store_vectors()` 完成后两步；
+- 新增 `tests/corpus_builder/test_handle_s17.py`；完整 QA 为 15 passed；
+- 使用官方 S17 v8.2 PDF 实际验证：过滤残留页眉 `INFORMATION SECURITY` 后生成 224 条 records，ID 全部唯一，长度范围为 7–220 个英文词；
+- 已完成正式 S17 建库：调用 `Qwen/Qwen3-VL-Embedding-8B` 生成 224 条 4096 维向量，并写入共享 Chroma collection `security_standards`；数据库记录数、S17 记录数和唯一 ID 数均为 224；
+- 下一步：实现或验证正式法规检索流程。
+
 ```markdown
 ### YYYY-MM-DD — 更新标题
 

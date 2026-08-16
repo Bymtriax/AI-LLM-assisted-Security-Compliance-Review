@@ -60,9 +60,9 @@ flowchart TB
 
 ### 5.1 法规建库模块
 
-- 每份条例有一个独立的 `build` 程序；该程序读取对应 PDF，并按该条例自己的结构筛选和切分内容；
-- `build` 程序将每个 chunk 交给 `embedded_api` 转为向量，再交给 `chromadb` 模块储存；
-- 每个 chunk 的 embedding 输入只包含：`section`、`parent_titles`（上级章节）和 `text`（条款正文）；
+- 每份条例有一个独立的 `handle` 程序；该程序读取对应 PDF，并按该条例自己的结构筛选和切分内容；
+- `handle` 程序将每个 chunk 的 `text` 交给 `embedded_api` 转为向量，再将完整 record 与向量交给 `vector_store` 储存；
+- 每个 chunk 的 embedding 输入只包含条款正文 `text`；章节、版本、页码和来源等信息保留在数据库 metadata；
 - 当前实验以 SiliconFlow 的 `Qwen/Qwen3-VL-Embedding-8B` 生成 4096 维向量；
 - 当前实验使用嵌入式本地 ChromaDB；数据库存于 `data/vector_db/`，无需独立数据库服务器；
 - ChromaDB 的每条记录由 `id`、向量、原始 `text` 与 metadata 组成；建库 manifest 记录输入文件、模型、向量维度、批次大小和建库时间；
@@ -70,7 +70,7 @@ flowchart TB
 #### 支撑模块
 
 ```text
-build（每份条例独立）
+handle（每份条例独立）
   读取 PDF → 筛选 / 切分 → 调用 embedded_api → 调用 vector_store 储存
 
 src/api/embedded_api.py（外部 API）
