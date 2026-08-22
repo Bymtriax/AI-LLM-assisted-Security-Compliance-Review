@@ -1,86 +1,98 @@
-# S17/G3 AI Security Compliance Assistant
+# S17/G3 AI Security Compliance Assistant: Project Framework
 
-This document describes the confirmed goals, architecture, module boundaries, and core data contracts of the project.
+> This document records only the confirmed system objectives, functions, and module boundaries.
 
-## 1. Objective
+## 1. Project Objective
 
-The project aims to build an AI-assisted security-compliance review system combining an agent, retrieval-augmented generation (RAG), and a web interface. Hong Kong Government Security Regulation S17 and the related G3 guidelines form the initial reference corpus.
+Develop an AI security compliance review system composed of an **Agent, RAG, and Web UI**.
 
-The system is intended to support three levels of input:
+The system uses Hong Kong's **S17** and **G3** as its initial example regulations. The Agent queries relevant regulations through RAG, interacts with the user, and produces review results.
 
-| Level | Input | Intended outcome |
+## 2. Three Input Levels
+
+| Level | Input | Objective |
 | --- | --- | --- |
-| 1 | A question about a regulation | Answer with traceable support from the source material |
-| 2 | An organization's internal policies | Identify differences between internal policy and the applicable guidance |
-| 3 | A project or system specification | Review the specification against relevant security requirements |
+| Level 1 | User questions about regulations | Provide basic AI question answering supported by actual regulations. |
+| Level 2 | A collection of examples from a company's own rules or internal policies | Identify content that is inconsistent with the more authoritative regulations. |
+| Level 3 | An example of a company's project specification | Review whether the project complies with the relevant security regulations. |
 
-## 2. High-level architecture
+## 3. High-Level System Architecture
 
 ```mermaid
 flowchart TB
-    standards["S17 and G3 source documents"] --> builder["Corpus builder"]
-    builder --> embedding["Embedding service"]
-    embedding --> database[("Vector database")]
+    S["S17 / G3 security regulations"] --> B["1. Regulation corpus builder"]
+    B --> E["Embedding Model"]
+    E --> V[("Vector Database")]
 
-    user["User"] <--> web["Web UI"]
-    web <--> agent["Compliance agent"]
-    agent --> model["Language model"]
-    agent --> rag["RAG retrieval layer"]
-    rag --> database
+    U["User"] <--> W["4. Web UI"]
+    W <--> A["3. Agent module"]
+    A --> L["AI model"]
+    A --> R["2. Regulation retrieval module (RAG)"]
+    R --> V
 ```
 
-Corpus construction is an offline operation performed when a source is first added or updated. Compliance review is an online workflow in which the agent retrieves relevant evidence before generating a response.
+## 4. Module Boundaries
 
-## 3. Module boundaries
-
-### 3.1 Corpus builder
-
-`src/corpus_builder/` converts source regulations into validated, retrievable records and maintains the local vector store.
-
-| Component | Responsibility |
+| Module | Function |
 | --- | --- |
-| `models.py` | Defines and validates the shared `CorpusRecord` data type |
-| `handle_s17.py` | Parses the English S17 PDF and returns structured records |
-| `build_corpus.py` | Runs registered handlers, checks global ID uniqueness, requests embeddings, and stores the results |
-| `vector_store.py` | Stores records with existing vectors and performs nearest-neighbor retrieval through ChromaDB |
+| 1. Regulation corpus builder | Read S17/G3, use an embedding model, and build the Vector Database. |
+| 2. Regulation retrieval module (RAG) | Find relevant regulation content in the Vector Database based on the Agent's query. |
+| 3. Agent module | Receive user input, call the AI model and regulation retrieval module, read the retrieved results, and produce review results. |
+| 4. Web UI | Interact with the user by receiving input and displaying the process and results. |
 
-Regulation-specific handlers only parse and transform their own sources. They do not call an embedding service or write to the database. This separation allows future G3 and other handlers to reuse the same record and storage interfaces.
+### Corpus Build Flow (Offline)
 
-`src/api/embedded_api.py` is the shared text-to-vector adapter. It preserves input order across batches and isolates external embedding-service behavior from the corpus and retrieval layers.
+1. The regulation corpus builder reads the S17/G3 source material.
+2. The regulation corpus builder uses an embedding model to write the regulation content to the Vector Database.
+
+The corpus is built only when the database is first created or when the regulations are updated.
+
+### User Review Flow (Online)
+
+1. The user enters a question, an internal company policy, or a project specification in the Web UI.
+2. The Web UI sends the input to the Agent.
+3. The Agent queries the relevant regulations through RAG.
+4. RAG returns relevant content from the Vector Database.
+5. The Agent calls the AI model, reads the input and retrieved results, and produces the review result.
+6. The Web UI displays the result to the user.
+
+## 5. Detailed Implementation of the Four Modules
+
+### 5.1 `corpus_builder`
+
+`src/corpus_builder/` converts original regulation documents into a retrievable corpus and maintains the local vector store. It defines a unified regulation record format, while regulation-specific programs handle only the structure of their respective PDFs. The vector storage module does not call the embedding API; it only accepts vectors that have already been generated. S17 is the current formal implementation. Future regulations can add their own `handle` programs while reusing the same data type and vector-store interfaces.
+
+#### Submodules
+
+| File | Responsibility | Main input and output |
+| --- | --- | --- |
+| `models.py` | Define and validate the shared data type. | `CorpusRecord` |
+| `handle_s17.py` | Read an English S17 PDF supplied by the caller, filter and split it according to the regulation structure, and create records; do not call the embedding API or storage module. | `Path` → `list[CorpusRecord]` |
+| `build_corpus.py` | Call registered handlers in sequence, merge and validate their records, then coordinate embedding generation and ChromaDB writes. | multiple handlers → `list[CorpusRecord]` + vectors → ChromaDB |
+| `vector_store.py` | Maintain embedded ChromaDB, store records and vectors, and retrieve the nearest records. | records + vectors ↔ ChromaDB; query vector → `list[CorpusRecord]` |
+
+`src/api/embedded_api.py` is the shared API wrapper outside this module. It converts text into vectors and guarantees that batch output follows the input order.
+
+#### Information Flow
 
 ```mermaid
 flowchart LR
-    pdf["Regulation PDF"] --> handler["Regulation handler"]
-    handler -->|"list[CorpusRecord]"| builder["Corpus builder"]
-    builder -->|"record.text"| embedding["Embedding API adapter"]
-    builder -->|"records"| store["Vector store"]
-    embedding -->|"vectors"| store
-    store --> database[("ChromaDB")]
+    pdf["S17 PDF"] -->|"page text"| handle["handle_s17.py"]
+    handle -->|"list[CorpusRecord]"| builder["build_corpus.py"]
+    builder -->|"record.text"| embedding["api/embedded_api.py"]
+    builder -->|"list[CorpusRecord]"| store["vector_store.py"]
+    embedding -->|"list[list[float]]"| store
+    store -->|"id, text, metadata, vector"| database[("Local ChromaDB")]
+
+    caller["RAG or query_vector_store.py"] -->|"query text"| embedding
+    embedding -->|"query vector"| store
+    database -->|"cosine retrieval results"| store
+    store -->|"list[CorpusRecord] ordered from most to less similar"| caller
 ```
 
-### 3.2 RAG retrieval layer
+Each handler accepts only a PDF `Path` and returns `list[CorpusRecord]`. The handler directly combines `Section`, `Parent sections`, and the original `Text` into `record.text`. `build_corpus.py` merges records from all handlers, validates globally unique IDs before calling an external API, and sends each `record.text` unchanged to the embedding API. The `id`, page numbers, source, and split-tracking information remain in the record metadata. The ChromaDB document and the `record.text` returned by queries contain the same contextualized text. During a query, `vector_store.py` uses cosine distance to find the nearest records and returns them from nearest to farthest without exposing distance as part of the public return value.
 
-The planned `src/rag/` module accepts a user question and returns assembled regulatory evidence for the agent. Internally, it will reuse `CorpusRecord` rather than introduce another cross-module record type.
-
-Its intended components are:
-
-- a retriever that embeds the question and queries the vector store;
-- a result processor that removes duplicate record IDs and limits the final result set; and
-- a server-facing interface that formats the selected records as evidence for the agent.
-
-Hybrid retrieval with BM25 is planned but not yet implemented.
-
-### 3.3 Agent
-
-The agent module will coordinate user input, regulatory retrieval, and language-model reasoning. Its detailed design has not yet been finalized.
-
-### 3.4 Web UI
-
-The web interface will collect questions or documents, show the review process, and present evidence-backed results. Its detailed design has not yet been finalized.
-
-## 4. Core data contract
-
-All corpus and retrieval components share the following immutable record shape:
+#### Internal Data Type
 
 ```python
 @dataclass(frozen=True)
@@ -90,22 +102,121 @@ class CorpusRecord:
     metadata: Mapping[str, str | int | float | bool]
 ```
 
-For S17, `text` contains the section, parent sections, and original clause text in a stable three-line format:
+At the top level, `CorpusRecord` stores a unique ID and the `text` used for retrieval. S17 `text` always consists of three lines: `Section: ...`, `Parent sections: ...`, and `Text: ...`; the final line contains the original regulation text. Metadata is a flat key-value structure and must include `document`, `version`, `language`, `section`, `parent_titles`, `source_file`, `pdf_page_start`, and `printed_page_start`. It may also preserve split-tracking data such as `parent_chunk_id`, `part_number`, `part_count`, `split_method`, `word_count`, and `text_sha256`. `word_count` counts the source text on the `Text` line, while `text_sha256` corresponds to the complete text actually stored. Record creation validates required fields, value types, and non-empty constraints. Metadata is frozen to prevent accidental modification after the corpus has been built.
 
-```text
-Section: 15.2.2
-Parent sections: 15. COMMUNICATIONS SECURITY > 15.2. Information Transfer
-Text: CONFIDENTIAL/RESTRICTED information shall be encrypted...
+#### Test Cases
+
+Tests are located under `tests/corpus_builder/` and use pytest. They do not call the real embedding API.
+
+| Test file | Coverage |
+| --- | --- |
+| `test_models.py` | Required `CorpusRecord` metadata, type and value restrictions, reserved-field conflicts, and metadata immutability. |
+| `test_handle_s17.py` | S17 PDF `Path` input requirements, PDF filtering and splitting, record metadata, and chunk-tracking information; the PDF reader is simulated with a test double. |
+| `test_build_corpus.py` | Merging records from multiple handlers, unified embedding input and storage, and rejecting duplicate IDs across handlers before external calls. |
+| `test_vector_store.py` | Single and batch writes to temporary ChromaDB, metadata round trips, similarity ordering, parameter validation, an empty database, and `top_k` values larger than the number of available records. |
+
+`tests/scripts/test_check_embedding_api.py` covers the one-time embedding API check script. It uses the same three-line text format as an S17 record and validates the structure and dimensions of a single vector in the API response.
+
+### 5.2 Regulation Retrieval Module (RAG)
+
+`src/rag/` is responsible for retrieving relevant regulations from a user question and returning assembled regulatory evidence text to the Agent. RAG exposes only one interface to the Agent: it accepts a user question as `str` and returns regulatory evidence as `str`. The internal retrieval and processing stages consistently reuse the existing `CorpusRecord` instead of introducing a new cross-module data type.
+
+#### Submodules
+
+| Submodule | Responsibility | Main input and output |
+| --- | --- | --- |
+| `RAG Server` | Connect directly to the Agent and assemble the final records into regulatory evidence text. | `str` → `str` |
+| `Retriever` | Convert the question into a vector, retrieve relevant regulation records from the vector store, and then call `ResultProcessor`. | `str` → `list[CorpusRecord]` |
+| `ResultProcessor` | Deduplicate by record ID and limit the final number of results. | `list[CorpusRecord]` → `list[CorpusRecord]` |
+
+#### Information Flow
+
+```mermaid
+flowchart TB
+    agent["Agent"] <--> server
+    embedding["api/embedded_api.py"]
+    store["corpus_builder/vector_store.py"]
+
+    subgraph rag["RAG module"]
+        server["RAG Server"]
+        retriever["Retriever"]
+        processor["ResultProcessor"]
+
+        server --> retriever
+        retriever --> processor
+        processor --> retriever
+    end
+
+    retriever <--> embedding
+    retriever <--> store
 ```
 
-Metadata retains traceability information such as the document, version, language, section, source filename, PDF page, printed page, split lineage, word count, and content hash. The same contextualized `text` is embedded, stored as the ChromaDB document, and returned from queries.
+`Retriever` uses `api/embedded_api.py` to convert the question into a vector and calls `corpus_builder/vector_store.py` to return `list[CorpusRecord]` ordered by similarity. `ResultProcessor` identifies duplicate records through `CorpusRecord.id` and retains the required final number. `RAG Server` reads each record's `text` and metadata and assembles the results into regulatory evidence for the Agent.
 
-## 5. Testing strategy
+### 5.3 Agent Module
 
-Automated tests mirror the production modules under `tests/`. They cover record validation and immutability, PDF parsing and chunk traceability, corpus orchestration, embedding batching and response validation, and vector-store persistence and ordering.
+To be determined.
 
-Tests must remain deterministic and must not call the real embedding service. External requests and PDF readers are replaced with controlled test doubles where appropriate.
+### 5.4 Web UI
 
-## 6. Data boundaries
+To be determined.
 
-Raw source documents, generated chunks, user uploads, credentials, embeddings, and local vector databases are not public repository artifacts. Public documentation describes provenance and behavior without publishing private or generated data.
+## 7. Current File Structure
+
+```text
+fyp_project/
+├─ .gitignore                   # Git ignore rules
+├─ environment.yml              # Conda environment definition
+├─ README.md                    # Project entry point
+│
+├─ data/
+│  ├─ raw/standards/            # Original S17/G3 PDFs
+│  │  ├─ en/                    # English sources (primary corpus for Plan 1)
+│  │  └─ zh-Hans/               # Chinese sources (future separate index)
+│  ├─ processed/                # Intermediate data for the formal corpus build
+│  ├─ uploads/                  # Future user uploads
+│  └─ vector_db/                # Local Vector Database
+│
+├─ docs/
+│  ├─ FRAMEWORK.md              # This document
+│  └─ PROCESS_AND_PLAN.md       # Plan and progress record
+│
+├─ scripts/
+│  ├─ build_corpus.py           # Unified regulation corpus build command
+│  ├─ check_embedding_api.py    # Manual embedding API check
+│  └─ query_vector_store.py     # Manual vector-store query
+│
+├─ exp/                         # Experimental code
+│  ├─ build_s17_chunks.py       # V1: split by regulation number
+│  ├─ build_s17_chunks_v2.py    # V2: semantic subdivision experiment
+│  └─ output/                   # Experimental output (not committed to Git)
+│     ├─ s17_en_chunks.jsonl
+│     ├─ s17_en_chunks_review.md
+│     ├─ s17_en_chunk_report.json
+│     ├─ s17_en_retrieval_chunks_v2.jsonl
+│     ├─ s17_en_retrieval_chunks_v2_review.md
+│     └─ s17_en_retrieval_chunks_v2_report.json
+│
+├─ src/
+│  ├─ agent/                    # Agent module
+│  ├─ api/                      # External API wrappers
+│  │  └─ embedded_api.py        # Text → vector
+│  ├─ corpus_builder/           # Formal corpus-building code
+│  │  ├─ models.py              # CorpusRecord type and metadata validation
+│  │  ├─ handle_s17.py          # S17 PDF Path → list[CorpusRecord]
+│  │  ├─ build_corpus.py        # Unified corpus build entry point
+│  │  └─ vector_store.py        # Vector storage and queries using ChromaDB
+│  ├─ rag/                      # RAG module
+│  └─ web_ui/                   # Web UI
+│
+└─ tests/
+   ├─ api/
+   │  └─ test_embedded_api.py   # embedded_api QA tests
+   ├─ corpus_builder/
+   │  ├─ test_build_corpus.py   # Unified corpus build tests
+   │  ├─ test_handle_s17.py     # S17 handler tests
+   │  ├─ test_models.py         # CorpusRecord tests
+   │  └─ test_vector_store.py   # vector_store tests
+   └─ scripts/
+      └─ test_check_embedding_api.py  # One-time API check script tests
+```
