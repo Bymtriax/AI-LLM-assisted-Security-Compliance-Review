@@ -1,4 +1,4 @@
-"""Extract retrieval records from the English S17 PDF and ingest them."""
+"""Extract retrieval records from one supplied English S17 PDF."""
 
 from __future__ import annotations
 
@@ -10,9 +10,10 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
+from corpus_builder.models import CorpusRecord
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SOURCE_PDF = PROJECT_ROOT / "data/raw/standards/en/S17_EN_v8.2_2025-04.pdf"
 
 DOCUMENT = "S17"
 VERSION = "8.2"
@@ -69,8 +70,8 @@ class _RetrievalPiece:
     split_method: str
 
 
-def handle_s17(pdf_path: Path = SOURCE_PDF) -> list[dict[str, object]]:
-    """Convert one complete English S17 PDF into vector-store-ready records."""
+def handle_s17(pdf_path: Path) -> list[CorpusRecord]:
+    """Convert one supplied English S17 PDF into corpus records."""
     if not pdf_path.is_file():
         raise FileNotFoundError(f"S17 source PDF not found: {pdf_path}")
 
@@ -347,16 +348,28 @@ def _retrieval_pieces(chunk: _StructuralChunk) -> list[_RetrievalPiece]:
     return pieces
 
 
-def _build_records(chunks: list[_StructuralChunk]) -> list[dict[str, object]]:
-    records: list[dict[str, object]] = []
+def _record_text(chunk: _StructuralChunk, body: str) -> str:
+    """Add the retrieval context that is stored with each S17 record."""
+    return "\n".join(
+        [
+            f"Section: {chunk.section}",
+            f"Parent sections: {' > '.join(chunk.parent_titles)}",
+            f"Text: {body}",
+        ]
+    )
+
+
+def _build_records(chunks: list[_StructuralChunk]) -> list[CorpusRecord]:
+    records: list[CorpusRecord] = []
     for chunk in chunks:
         pieces = _retrieval_pieces(chunk)
         for part_number, piece in enumerate(pieces, start=1):
+            record_text = _record_text(chunk, piece.text)
             records.append(
-                {
-                    "id": f"{chunk.id}-part-{part_number:02d}",
-                    "text": piece.text,
-                    "metadata": {
+                CorpusRecord(
+                    id=f"{chunk.id}-part-{part_number:02d}",
+                    text=record_text,
+                    metadata={
                         "document": DOCUMENT,
                         "version": VERSION,
                         "language": LANGUAGE,
@@ -370,45 +383,26 @@ def _build_records(chunks: list[_StructuralChunk]) -> list[dict[str, object]]:
                         "pdf_page_start": chunk.pdf_page_start,
                         "printed_page_start": chunk.printed_page_start or "",
                         "word_count": _word_count(piece.text),
-                        "text_sha256": sha256(piece.text.encode("utf-8")).hexdigest(),
+                        "text_sha256": sha256(record_text.encode("utf-8")).hexdigest(),
                         "source_file": chunk.source_file,
                     },
-                }
+                )
             )
     return records
 
 
-def _validate_records(records: list[dict[str, object]]) -> None:
+def _validate_records(records: list[CorpusRecord]) -> None:
     if not records:
         raise ValueError("S17 extraction produced no records.")
-    ids = [str(record["id"]) for record in records]
+    ids = [record.id for record in records]
     if len(ids) != len(set(ids)):
         raise ValueError("S17 extraction produced duplicate record IDs.")
-    if any(not str(record["text"]).strip() for record in records):
+    if any(not record.text.strip() for record in records):
         raise ValueError("S17 extraction produced an empty record text.")
     oversized = [
-        str(record["id"])
+        record.id
         for record in records
-        if int(dict(record["metadata"])["word_count"]) > HARD_MAX_WORDS
+        if int(record.metadata["word_count"]) > HARD_MAX_WORDS
     ]
     if oversized:
         raise ValueError(f"S17 records exceed the hard word limit: {oversized}")
-
-
-def main() -> None:
-    """Run the complete S17 ingestion flow using the shared modules."""
-    from api import embedded_api
-    from corpus_builder import vector_store
-
-    records = handle_s17()
-
-    # Step 2: Send only each chunk's legal text to the embedding API.
-    vectors = embedded_api.embed_texts([str(record["text"]) for record in records])
-
-    # Step 3: Store the vectors together with the full records and metadata.
-    vector_store.store_vectors(records, vectors)
-    print(f"Stored {len(records)} S17 records in the shared vector database.")
-
-
-if __name__ == "__main__":
-    main()

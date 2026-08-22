@@ -1,4 +1,4 @@
-"""Ask questions and print the three nearest records in the vector database."""
+"""Ask questions and print the three nearest corpus records in the vector database."""
 
 from __future__ import annotations
 
@@ -29,13 +29,8 @@ def main() -> None:
             continue
 
         for rank, result in enumerate(results, start=1):
-            metadata = result["metadata"]
-            print(
-                f"\n{rank}. {result['id']} | "
-                f"section {metadata['section']} | "
-                f"distance {result['distance']:.4f}"
-            )
-            print(result["text"])
+            print(f"\n{rank}. {result.id}")
+            print(result.text)
 
 
 if __name__ == "__main__":

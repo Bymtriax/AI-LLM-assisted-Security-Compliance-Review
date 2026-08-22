@@ -2,22 +2,13 @@
 
 > 本文件记录已经发布的计划、实际进度和计划变更。
 
-## 当前计划
+## 计划（未实现）
 
-### Plan 1：探索并实现 RAG
+### 混合RAG 检索
 
-**目标：** 完成 RAG 的法规建库和法规检索部分。
+- [ ] 新增 BM25 关键词检索；
 
-**范围：**
-
-1. 使用 S17/G3 作为输入资料，调用 embedding model 建立 Vector Database；
-2. 实现法规检索：输入一个查询，返回相关的 S17/G3 内容。
-
-**不包括：** Agent 模块和 Web UI。
-
-**完成结果：** 已建立包含 S17/G3 的 Vector Database，并可根据查询取得相关条例内容。
-
-## 进度记录
+## 进度（已实现）
 
 ### 2026-08-11 — 整理法规原件
 
@@ -120,7 +111,6 @@
 - 新增 `tests/corpus_builder/test_vector_store.py`，使用临时 ChromaDB 测试储存、查询、批量排序和输入验证；
 - 已运行 QA：4 passed。
 
-## 更新格式
 
 ### 2026-08-16 — 正式 S17 处理程序
 
@@ -133,7 +123,46 @@
 - 已完成正式 S17 建库：调用 `Qwen/Qwen3-VL-Embedding-8B` 生成 224 条 4096 维向量，并写入共享 Chroma collection `security_standards`；数据库记录数、S17 记录数和唯一 ID 数均为 224；
 - 下一步：实现或验证正式法规检索流程。
 
+### 2026-08-16 — 正式库 embedding 上下文
+
+- 正式 S17 建库改为将条款编号、上级章节标题和条款正文共同输入 embedding 模型；
+- 数据库保存的 document 仍为原始条款正文，供检索结果展示、引用和生成回答时使用；
+- 这一格式与先前 ChromaDB 实验保持一致，可让较短的条款保留所属法规领域和主题语义；
+- 已删除并重建共享 Chroma collection，以免混用旧的纯正文向量与新向量。
+
+### 2026-08-19 — Vector Store 查询记录类型
+
+- `query_vectors(vector, top_k=3)` 改为返回按相似度排序的 `list[CorpusRecord]`，不再将 Chroma distance 暴露为公共结果字段；
+- 交互查询脚本改为直接读取 record 的 `id`、`text` 和 metadata；
+- Vector Store 相关测试改为验证查询结果的 `CorpusRecord` 类型与完整 metadata 往返。
+- 完整离线测试：42 passed。
+
+### 2026-08-20 — S17 Handler 职责收敛
+
+- `handle_s17(pdf_path: Path)` 改为必填 PDF 路径并只返回 `list[CorpusRecord]`；
+- 已移除 handler 内部的 embedding、写入 ChromaDB 和命令列入口，后续由统一建库编排器处理；
+- 测试改为验证必填路径契约，不再测试已移除的建库编排流程。
+
+### 2026-08-20 — 统一法规建库入口
+
+- 新增 `src/corpus_builder/build_corpus.py`，依次调用已登记的 handlers，合并 `CorpusRecord` 后完成既有 embedding 与 ChromaDB 写入流程；
+- 新增 `scripts/build_corpus.py`，作为从项目根目录启动统一建库的命令入口；
+- S17 是当前登记的 handler，后续法规 handler 只需加入 `HANDLERS`；
+- 入口在调用 embedding API 前验证跨 handler 的 record ID 唯一，避免重复记录写入；
+- 本次不建立 BM25 索引，BM25 步骤将在后续加入。
+- 完整离线测试：44 passed。
+
+### 2026-08-20 — S17 Record 检索文本
+
+- S17 handler 现在直接在 `CorpusRecord.text` 写入 `Section`、`Parent sections` 与 `Text` 三行格式；
+- 统一建库入口原样将 `record.text` 传给 embedding API，ChromaDB document 与查询结果也保留相同上下文；
+- `text_sha256` 改为对应实际储存的完整检索文本。
+- 全部 corpus 测试资料改为使用带上下文的 S17 `text`；一次性 embedding API 检查脚本也改用并验证相同格式。
+- 完整离线测试：51 passed。
+
 ```markdown
+## 更新格式
+
 ### YYYY-MM-DD — 更新标题
 
 - 完成：

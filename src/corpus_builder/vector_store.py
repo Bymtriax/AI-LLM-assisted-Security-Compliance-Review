@@ -6,35 +6,36 @@ from pathlib import Path
 
 import chromadb
 
+from corpus_builder.models import CorpusRecord
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATABASE_DIR = PROJECT_ROOT / "data/vector_db/chroma"
 COLLECTION_NAME = "security_standards"
 
 
-def store_vector(record: dict[str, object], vector: list[float]) -> None:
-    """Store one regulation record and its vector."""
+def store_vector(record: CorpusRecord, vector: list[float]) -> None:
+    """Store one corpus record and its vector."""
     store_vectors([record], [vector])
 
 
-def store_vectors(records: list[dict[str, object]], vectors: list[list[float]]) -> None:
-    """Store regulation records and vectors in matching order."""
+def store_vectors(records: list[CorpusRecord], vectors: list[list[float]]) -> None:
+    """Store corpus records and vectors in matching order."""
     if len(records) != len(vectors):
         raise ValueError("Records and vectors must have the same length.")
     if not records:
         return
 
-    ids, texts, metadatas = zip(*(_record_parts(record) for record in records))
     _collection().upsert(
-        ids=list(ids),
+        ids=[record.id for record in records],
         embeddings=vectors,
-        documents=list(texts),
-        metadatas=list(metadatas),
+        documents=[record.text for record in records],
+        metadatas=[dict(record.metadata) for record in records],
     )
 
 
-def query_vectors(vector: list[float], top_k: int = 3) -> list[dict[str, object]]:
-    """Return up to top_k regulation records nearest to one query vector."""
+def query_vectors(vector: list[float], top_k: int = 3) -> list[CorpusRecord]:
+    """Return up to top_k nearest corpus records in similarity-rank order."""
     if not vector:
         raise ValueError("Query vector cannot be empty.")
     if top_k < 1:
@@ -47,20 +48,14 @@ def query_vectors(vector: list[float], top_k: int = 3) -> list[dict[str, object]
     result = collection.query(
         query_embeddings=[vector],
         n_results=min(top_k, collection.count()),
-        include=["documents", "metadatas", "distances"],
+        include=["documents", "metadatas"],
     )
     return [
-        {
-            "id": chunk_id,
-            "text": text,
-            "metadata": metadata,
-            "distance": distance,
-        }
-        for chunk_id, text, metadata, distance in zip(
+        CorpusRecord(id=chunk_id, text=text, metadata=metadata)
+        for chunk_id, text, metadata in zip(
             result["ids"][0],
             result["documents"][0],
             result["metadatas"][0],
-            result["distances"][0],
         )
     ]
 
@@ -73,17 +68,3 @@ def _collection() -> chromadb.Collection:
         name=COLLECTION_NAME,
         configuration={"hnsw": {"space": "cosine"}},
     )
-
-
-def _record_parts(record: dict[str, object]) -> tuple[str, str, dict[str, str | int | float | bool]]:
-    """Validate and unpack the record shape required by ChromaDB."""
-    try:
-        chunk_id = str(record["id"])
-        text = str(record["text"])
-        metadata = dict(record["metadata"])
-    except (KeyError, TypeError, ValueError) as error:
-        raise ValueError("Each record needs id, text and metadata.") from error
-
-    if not chunk_id or not text:
-        raise ValueError("Record id and text cannot be empty.")
-    return chunk_id, text, metadata

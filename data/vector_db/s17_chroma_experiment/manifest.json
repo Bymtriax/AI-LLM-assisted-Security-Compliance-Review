@@ -1,0 +1,15 @@
+{
+  "collection_name": "s17_en_v8_2_experiment",
+  "source_file": "exp/output/s17_en_retrieval_chunks_v2.jsonl",
+  "source_sha256": "ed36aea29a27aad6685a43424c32deb1f7c7c2d4652bb33869c4b95b533eb7e1",
+  "embedding_model": "Qwen/Qwen3-VL-Embedding-8B",
+  "embedding_input_fields": [
+    "section",
+    "parent_titles",
+    "text"
+  ],
+  "chunk_count": 225,
+  "vector_dimension": 4096,
+  "batch_size": 8,
+  "built_at_utc": "2026-08-12T07:29:24.858099+00:00"
+}
