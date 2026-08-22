@@ -4,9 +4,8 @@ An AI-assisted security-compliance review project using Hong Kong S17 and G3 as 
 
 ## Project documents
 
-- [Project framework](docs/PROJECT_FRAMEWORK.md)
-- [Plan and progress](docs/PROJECT_PLAN_AND_PROGRESS.md)
-- [Standards inventory](docs/STANDARDS.md)
+- [System framework](docs/FRAMEWORK.md)
+- [Process and plan](docs/PROCESS_AND_PLAN.md)
 
 ## Python environment
 
@@ -27,7 +26,7 @@ conda env update -f environment.yml --prune
 ## Directory overview
 
 ```text
-docs/       Project decisions, plans, and standards inventory
+docs/       Public English architecture and roadmap documentation
 src/        Main application code
 scripts/    Manual developer commands
 tests/      Automated tests

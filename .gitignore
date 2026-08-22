@@ -11,7 +11,13 @@ __pycache__/
 exp/output/
 tmp/
 
-# Raw source documents: keep provenance in docs/STANDARDS.md
+# Private working notes (public documentation belongs in docs/)
+note/
+
+# Local agent instructions
+AGENTS.md
+
+# Raw source documents: keep public provenance in project documentation
 data/raw/
 
 # Logs
