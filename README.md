@@ -32,3 +32,24 @@ scripts/    Manual developer commands
 tests/      Automated tests
 data/       Raw, generated, and private data (not committed)
 ```
+
+## Run the basic terminal chat
+
+Activate the project environment from the repository root:
+
+```powershell
+conda activate fyp-security-compliance
+```
+
+Copy `.env.example` to `.env` if needed, then set your local SiliconFlow API
+key. Never commit the `.env` file.
+
+```dotenv
+SILICONFLOW_API_KEY=your_key_here
+```
+
+Start the chat:
+
+```powershell
+python scripts/chat_agent.py
+```

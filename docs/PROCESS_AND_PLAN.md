@@ -159,6 +159,44 @@
 - Changed all corpus test fixtures to use contextual S17 `text`; the one-time embedding API check script now uses and validates the same format.
 - Ran the full offline suite with 51 tests passing.
 
+### RAG Retriever and Agent-facing service
+
+- Added a configurable `Retriever` type in `src/rag/retriever.py` and a `RAGService` type in `src/rag/rag_service.py` as the Agent-facing interface.
+- Made Retriever call `api/embedded_api.py` to vectorize Agent-supplied text and call `corpus_builder/vector_store.py` for similarity retrieval.
+- Made the interface return `list[str]` by preserving the vector store's most-to-least relevant order and extracting each `CorpusRecord.text`.
+- Added offline tests for service delegation, API and vector-store coordination, result ordering, an empty database, and input validation; the tests do not call the real embedding API or database.
+- Deferred result post-processing to later changes.
+
+### SiliconFlow chat-completions API wrapper
+
+- Added `src/api/llm_api.py` as the generation-model boundary for the future Agent module.
+- Simplified the public interface to `generate_text(text) -> str`: it sends one text to the fixed DeepSeek-V4-Flash model and returns the reply text.
+- Reused the existing local `SILICONFLOW_API_KEY` configuration and set `deepseek-ai/DeepSeek-V4-Flash` as the default generation model.
+- Added `exp/test_siliconflow_chat.py` for a one-time real connectivity check with a short security-compliance prompt.
+- Added offline tests for request construction, response extraction, input validation, missing credentials, and malformed responses; tests do not call the real API.
+- Verified the experiment against the real service: DeepSeek-V4-Flash returned a valid concise compliance concern using the existing local API key.
+- Added `scripts/check_llm_api.py` for manually entering one text, printing one model reply, and then exiting.
+
+### Chat API message type
+
+- Added `Message` in `src/api/models.py` with `role` and `content` fields for the chat API and Agent conversation history.
+- Added `generate_messages(messages) -> str`; the existing `generate_text(text) -> str` remains as the simple one-text interface.
+- Added a focused offline test for the new type.
+
+### Basic Agent conversation service
+
+- Added `AgentService.respond(text) -> str` with an internal message list.
+- Made each response include the accumulated user and assistant conversation, then store the new assistant reply.
+- Deferred tool decisions and RAG orchestration.
+- Added `scripts/chat_agent.py` as a terminal conversation entry point that reuses one `AgentService` until the user enters `exit` or `quit`.
+- Added a separate Agent system prompt describing the conversation context, decision flow, and JSON format for direct answers or the `retrieve_regulations` tool.
+- Made `AgentService` prepend the system prompt to every model request without storing it in conversation history.
+- Added JSON response parsing and one direct `retrieve_regulations` tool path to `AgentService`.
+- Made each retrieval append one visible system message containing the query and joined `list[str]` results; tool-call JSON remains internal.
+- Added a copied `AgentService.messages` view and made the terminal script display new retrieval system messages before the final answer.
+- Colored terminal speaker labels for readability: user green, Agent blue, and system retrieval messages yellow.
+- Declared in the Agent prompt that the current knowledge base contains only English S17 v8.2, and required explicit disclosure when requested material is outside that scope.
+
 ```markdown
 ## Update format
 

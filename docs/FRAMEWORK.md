@@ -119,43 +119,46 @@ Tests are located under `tests/corpus_builder/` and use pytest. They do not call
 
 ### 5.2 Regulation Retrieval Module (RAG)
 
-`src/rag/` is responsible for retrieving relevant regulations from a user question and returning assembled regulatory evidence text to the Agent. RAG exposes only one interface to the Agent: it accepts a user question as `str` and returns regulatory evidence as `str`. The internal retrieval and processing stages consistently reuse the existing `CorpusRecord` instead of introducing a new cross-module data type.
+`src/rag/` is responsible for retrieving relevant regulations from text supplied by the Agent. `RAGService` is the Agent-facing boundary and returns matching regulation texts as `list[str]`. It delegates to `Retriever`, which converts the question into a vector, retrieves similarity-ordered `CorpusRecord` objects, and returns their text in the same order. The first item is the most relevant match. No separate result-processing stage is implemented yet.
 
 #### Submodules
 
 | Submodule | Responsibility | Main input and output |
 | --- | --- | --- |
-| `RAG Server` | Connect directly to the Agent and assemble the final records into regulatory evidence text. | `str` → `str` |
-| `Retriever` | Convert the question into a vector, retrieve relevant regulation records from the vector store, and then call `ResultProcessor`. | `str` → `list[CorpusRecord]` |
-| `ResultProcessor` | Deduplicate by record ID and limit the final number of results. | `list[CorpusRecord]` → `list[CorpusRecord]` |
+| `RAGService` | Provide the Agent-facing interface and delegate the question to Retriever. | `str` → `list[str]` |
+| `Retriever` | Convert Agent-supplied text into a vector, retrieve relevant regulation records, and return their text without changing similarity order. | `str` → `list[str]` |
 
 #### Information Flow
 
 ```mermaid
 flowchart TB
-    agent["Agent"] <--> server
+    agent["Agent"] <--> service
     embedding["api/embedded_api.py"]
     store["corpus_builder/vector_store.py"]
 
     subgraph rag["RAG module"]
-        server["RAG Server"]
+        service["RAGService"]
         retriever["Retriever"]
-        processor["ResultProcessor"]
-
-        server --> retriever
-        retriever --> processor
-        processor --> retriever
+        service --> retriever
     end
 
     retriever <--> embedding
     retriever <--> store
 ```
 
-`Retriever` uses `api/embedded_api.py` to convert the question into a vector and calls `corpus_builder/vector_store.py` to return `list[CorpusRecord]` ordered by similarity. `ResultProcessor` identifies duplicate records through `CorpusRecord.id` and retains the required final number. `RAG Server` reads each record's `text` and metadata and assembles the results into regulatory evidence for the Agent.
+`Retriever` uses `api/embedded_api.py` to convert the supplied text into a vector and calls `corpus_builder/vector_store.py` to obtain `list[CorpusRecord]` ordered from most to least similar. It then returns each `CorpusRecord.text` as `list[str]` without reordering the results. Embedding API coordination belongs to `Retriever`; the vector store continues to accept only vectors and does not call external APIs. Deduplication, reranking, and other result processing are deferred.
 
 ### 5.3 Agent Module
 
 To be determined.
+
+The initial `AgentService` provides `respond(text: str) -> str`. One service instance keeps an internal `list[Message]`, sends the accumulated user and assistant conversation to the language-model API, stores the returned assistant reply, and returns that reply. `Message` is defined by the API module because it follows the chat-completions message contract and supports `system`, `user`, and `assistant` roles. The service parses the model's JSON response; an `answer` stores and returns its content, while a `tool_call` for `retrieve_regulations` calls `RAGService` once and sends the joined `list[str]` evidence back to the model for a final answer.
+
+`src/agent/prompts.py` defines the system message separately from conversation history. It describes the security-compliance context, instructs the model to decide whether regulatory evidence is needed, and defines JSON-only `answer` and `tool_call` responses. The only declared tool is `retrieve_regulations`, whose `arguments.text` contains the text to retrieve. The system message is prepended for each model request but is not stored as user-visible conversation history.
+
+The system message identifies the current retrieval scope as the English S17 v8.2 corpus only. It states that G3, other regulations or standards, private company documents, and Internet content are not present, and requires the Agent to disclose this limitation instead of claiming unavailable material was retrieved.
+
+Tool-call JSON remains temporary orchestration data. When retrieval runs, the service appends one visible `system` message containing the retrieval text and joined results, followed by the final assistant answer. `AgentService.messages` returns a copy of the visible conversation list so callers such as the terminal script can display system messages without modifying internal state.
 
 ### 5.4 Web UI
 
