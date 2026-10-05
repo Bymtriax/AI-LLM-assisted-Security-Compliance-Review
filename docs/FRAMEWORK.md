@@ -92,17 +92,6 @@ flowchart LR
 
 Each handler accepts only a PDF `Path` and returns `list[CorpusRecord]`. The handler directly combines `Section`, `Parent sections`, and the original `Text` into `record.text`. `build_corpus.py` merges records from all handlers, validates globally unique IDs before calling an external API, and sends each `record.text` unchanged to the embedding API. The `id`, page numbers, source, and split-tracking information remain in the record metadata. The ChromaDB document and the `record.text` returned by queries contain the same contextualized text. During a query, `vector_store.py` uses cosine distance to find the nearest records and returns them from nearest to farthest without exposing distance as part of the public return value.
 
-#### Internal Data Type
-
-```python
-@dataclass(frozen=True)
-class CorpusRecord:
-    id: str
-    text: str
-    metadata: Mapping[str, str | int | float | bool]
-```
-
-At the top level, `CorpusRecord` stores a unique ID and the `text` used for retrieval. S17 `text` always consists of three lines: `Section: ...`, `Parent sections: ...`, and `Text: ...`; the final line contains the original regulation text. Metadata is a flat key-value structure and must include `document`, `version`, `language`, `section`, `parent_titles`, `source_file`, `pdf_page_start`, and `printed_page_start`. It may also preserve split-tracking data such as `parent_chunk_id`, `part_number`, `part_count`, `split_method`, `word_count`, and `text_sha256`. `word_count` counts the source text on the `Text` line, while `text_sha256` corresponds to the complete text actually stored. Record creation validates required fields, value types, and non-empty constraints. Metadata is frozen to prevent accidental modification after the corpus has been built.
 
 #### Test Cases
 
@@ -116,6 +105,8 @@ Tests are located under `tests/corpus_builder/` and use pytest. They do not call
 | `test_vector_store.py` | Single and batch writes to temporary ChromaDB, metadata round trips, similarity ordering, parameter validation, an empty database, and `top_k` values larger than the number of available records. |
 
 `tests/scripts/test_check_embedding_api.py` covers the one-time embedding API check script. It uses the same three-line text format as an S17 record and validates the structure and dimensions of a single vector in the API response.
+
+
 
 ### 5.2 Regulation Retrieval Module (RAG)
 
@@ -152,74 +143,65 @@ flowchart TB
 
 To be determined.
 
-The initial `AgentService` provides `respond(text: str) -> str`. One service instance keeps an internal `list[Message]`, sends the accumulated user and assistant conversation to the language-model API, stores the returned assistant reply, and returns that reply. `Message` is defined by the API module because it follows the chat-completions message contract and supports `system`, `user`, and `assistant` roles. The service parses the model's JSON response; an `answer` stores and returns its content, while a `tool_call` for `retrieve_regulations` calls `RAGService` once and sends the joined `list[str]` evidence back to the model for a final answer.
-
-`src/agent/prompts.py` defines the system message separately from conversation history. It describes the security-compliance context, instructs the model to decide whether regulatory evidence is needed, and defines JSON-only `answer` and `tool_call` responses. The only declared tool is `retrieve_regulations`, whose `arguments.text` contains the text to retrieve. The system message is prepended for each model request but is not stored as user-visible conversation history.
-
-The system message identifies the current retrieval scope as the English S17 v8.2 corpus only. It states that G3, other regulations or standards, private company documents, and Internet content are not present, and requires the Agent to disclose this limitation instead of claiming unavailable material was retrieved.
-
-Tool-call JSON remains temporary orchestration data. When retrieval runs, the service appends one visible `system` message containing the retrieval text and joined results, followed by the final assistant answer. `AgentService.messages` returns a copy of the visible conversation list so callers such as the terminal script can display system messages without modifying internal state.
 
 ### 5.4 Web UI
 
 To be determined.
 
+
 ## 7. Current File Structure
 
 ```text
 fyp_project/
-├─ .gitignore                   # Git ignore rules
-├─ environment.yml              # Conda environment definition
-├─ README.md                    # Project entry point
-│
-├─ data/
-│  ├─ raw/standards/            # Original S17/G3 PDFs
-│  │  ├─ en/                    # English sources (primary corpus for Plan 1)
-│  │  └─ zh-Hans/               # Chinese sources (future separate index)
-│  ├─ processed/                # Intermediate data for the formal corpus build
-│  ├─ uploads/                  # Future user uploads
-│  └─ vector_db/                # Local Vector Database
-│
-├─ docs/
-│  ├─ FRAMEWORK.md              # This document
-│  └─ PROCESS_AND_PLAN.md       # Plan and progress record
-│
-├─ scripts/
-│  ├─ build_corpus.py           # Unified regulation corpus build command
-│  ├─ check_embedding_api.py    # Manual embedding API check
-│  └─ query_vector_store.py     # Manual vector-store query
-│
-├─ exp/                         # Experimental code
-│  ├─ build_s17_chunks.py       # V1: split by regulation number
-│  ├─ build_s17_chunks_v2.py    # V2: semantic subdivision experiment
-│  └─ output/                   # Experimental output (not committed to Git)
-│     ├─ s17_en_chunks.jsonl
-│     ├─ s17_en_chunks_review.md
-│     ├─ s17_en_chunk_report.json
-│     ├─ s17_en_retrieval_chunks_v2.jsonl
-│     ├─ s17_en_retrieval_chunks_v2_review.md
-│     └─ s17_en_retrieval_chunks_v2_report.json
-│
-├─ src/
-│  ├─ agent/                    # Agent module
-│  ├─ api/                      # External API wrappers
-│  │  └─ embedded_api.py        # Text → vector
-│  ├─ corpus_builder/           # Formal corpus-building code
-│  │  ├─ models.py              # CorpusRecord type and metadata validation
-│  │  ├─ handle_s17.py          # S17 PDF Path → list[CorpusRecord]
-│  │  ├─ build_corpus.py        # Unified corpus build entry point
-│  │  └─ vector_store.py        # Vector storage and queries using ChromaDB
-│  ├─ rag/                      # RAG module
-│  └─ web_ui/                   # Web UI
-│
-└─ tests/
-   ├─ api/
-   │  └─ test_embedded_api.py   # embedded_api QA tests
-   ├─ corpus_builder/
-   │  ├─ test_build_corpus.py   # Unified corpus build tests
-   │  ├─ test_handle_s17.py     # S17 handler tests
-   │  ├─ test_models.py         # CorpusRecord tests
-   │  └─ test_vector_store.py   # vector_store tests
-   └─ scripts/
-      └─ test_check_embedding_api.py  # One-time API check script tests
+├─ .gitignore                      # Git ignore rules
+├─ environment.yml                 # Conda environment definition
+├─ README.md                       # Project entry point and local startup
+├─ data/                           # Local source and generated data
+│  ├─ raw/standards/               # Original English and Chinese S17/G3 PDFs; ignored
+│  ├─ processed/                   # Standalone PDF-to-JSON output; ignored
+│  ├─ uploads/                     # Reserved for user uploads
+│  └─ vector_db/                   # Local ChromaDB databases; currently tracked
+├─ docs/                           # Public English project documents
+│  ├─ FRAMEWORK.md                 # System framework
+│  ├─ PROCESS_AND_PLAN.md          # Plan and progress record
+│  └─ INTERFACE.md                 # Current module interfaces
+├─ scripts/                        # Supported manual entry points
+│  ├─ build_corpus.py              # Build the formal regulation corpus
+│  ├─ check_embedding_api.py       # Manual embedding API check
+│  ├─ check_llm_api.py             # Manual language-model API check
+│  ├─ chat_agent.py                # Terminal Agent conversation
+│  ├─ query_vector_store.py        # Query the formal vector store
+│  ├─ run.py                       # Combined local web startup entry point
+│  ├─ run_web_api.py               # Run the local HTTP chat API
+│  ├─ run_web_ui.py                # Launch and stop API and UI processes
+│  └─ split_pdfs.py                # Export English S17/G3 records to JSON
+├─ exp/                            # Experiments; new untracked files are ignored
+├─ src/                            # Production modules
+│  ├─ agent/                       # Agent orchestration and prompts
+│  ├─ api/                         # External API wrappers and Message type
+│  │  ├─ embedded_api.py           # Text-to-vector API wrapper
+│  │  ├─ llm_api.py                # JSON model reply API wrapper
+│  │  └─ models.py                 # Shared chat Message type
+│  ├─ corpus_builder/              # Regulation parsing and vector storage
+│  │  ├─ models.py                 # Shared CorpusRecord type
+│  │  ├─ handle_s17.py             # Formal S17 PDF handler
+│  │  ├─ build_corpus.py           # Formal embedding and storage orchestration
+│  │  ├─ split_pdf.py              # Standalone English S17/G3 preprocessing
+│  │  └─ vector_store.py           # ChromaDB storage and vector queries
+│  ├─ rag/                         # Retriever and Agent-facing RAGService
+│  ├─ web_api/                     # HTTP chat boundary
+│  │  └─ app.py                    # FastAPI application and chat validation
+│  └─ web_ui/                      # Static browser chat frontend
+│     ├─ index.html                # Chat page
+│     ├─ styles.css                # Page styles
+│     ├─ app.mjs                   # Browser rendering and input handling
+│     └─ chat_client.mjs           # Conversation history and HTTP requests
+└─ tests/                          # Deterministic offline tests
+   ├─ agent/                       # Agent behavior and prompts
+   ├─ api/                         # Message type and external API wrappers
+   ├─ corpus_builder/              # Records, handlers, preprocessing and storage
+   ├─ rag/                         # Retrieval and service delegation
+   ├─ scripts/                     # Manual commands and web launcher
+   ├─ web_api/                     # HTTP chat requests and responses
+   └─ web_ui/                      # Node tests for the browser chat client
 ```

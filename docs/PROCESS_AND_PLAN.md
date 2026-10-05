@@ -2,6 +2,13 @@
 
 > This file records published plans, actual progress, and plan changes.
 
+## Current Repository Structure
+
+- `src/` contains `corpus_builder/`, `api/`, `rag/`, `agent/`, `web_api/`, and `web_ui/`; `tests/` mirrors these modules and also covers `scripts/`.
+- `scripts/` contains corpus building, API checks, terminal chat, vector queries, local web startup, and standalone S17/G3 PDF-to-JSON commands.
+- `docs/FRAMEWORK.md` records the directory tree; `docs/INTERFACE.md` records current module interfaces.
+- `data/raw/` and `data/processed/` are ignored local data directories. Existing `data/vector_db/` files remain tracked; `exp/` ignores new untracked experimental files.
+
 ## Plan (not implemented)
 
 ### Hybrid RAG retrieval
@@ -196,6 +203,107 @@
 - Added a copied `AgentService.messages` view and made the terminal script display new retrieval system messages before the final answer.
 - Colored terminal speaker labels for readability: user green, Agent blue, and system retrieval messages yellow.
 - Declared in the Agent prompt that the current knowledge base contains only English S17 v8.2, and required explicit disclosure when requested material is outside that scope.
+
+### Stateless Agent conversation input
+
+- Changed `AgentService.respond()` to accept the complete caller-managed `list[Message]`, ending with a user message, and return the answer without retaining or modifying conversation history.
+- Kept the Agent system prompt and current-turn regulation evidence inside the model request; rejected caller-supplied `system` messages.
+- Added an optional retrieval callback so the terminal script can continue displaying regulation search results while managing its own user/assistant history.
+- Updated offline tests for supplied history, isolated conversations, temporary retrieval evidence, input validation, and terminal conversation handling.
+- Ran the full offline suite with 75 tests passing.
+
+### Initial HTTP chat API
+
+- Added `src/web_api/app.py` with `POST /api/chat`: the caller sends the complete user/assistant conversation, and the response contains one new assistant message.
+- Validated message roles, non-blank content, a non-empty conversation, and a final user message before calling a fresh `AgentService`; no conversation is stored by the server.
+- Added `scripts/run_web_api.py` for local Uvicorn startup and configurable browser origins through `WEB_API_ALLOWED_ORIGINS`.
+- Added FastAPI, Pydantic, Uvicorn, and HTTPX to `environment.yml` and documented the request and response in `README.md`.
+- Added offline HTTP tests with a mocked Agent and no external API calls.
+- Ran the full offline suite with 83 tests passing; a local Uvicorn check returned `200` for `/openapi.json` and `422` for an invalid chat request.
+
+### Return retrieval messages from the chat API
+
+- Changed the chat response to a `messages` array in display order: a direct answer returns one `assistant` message; a RAG-assisted answer returns the Agent's retrieval `system` message followed by its `assistant` answer.
+- The retrieval message includes the search query and retrieved regulation texts already produced by the Agent; no separate retrieval field was added.
+- Allowed previously returned `system` messages in subsequent requests for display continuity, while excluding them from the conversation passed to the Agent.
+- Updated the HTTP tests and the public API examples for both response paths.
+- Ran the full offline suite with 85 tests passing.
+
+### Diagnose malformed model replies after RAG
+
+- Added offline Agent tests that distinguish malformed replies during the initial decision from malformed replies after regulation retrieval, including empty, plain-text, and Markdown-fenced output.
+- Moved the retrieval callback to immediately after RAG returns evidence, before the final model request; the terminal script now shows that evidence in yellow even if the final reply fails.
+- Made Agent parsing errors identify the failed phase and output category without displaying raw model text. A failed terminal turn is not added to conversation history.
+- Ran the full offline suite with 92 tests passing and one dependency deprecation warning.
+
+### Show malformed model replies in the terminal
+
+- Added `ModelResponseError` to carry the complete raw reply separately from its safe error message when model JSON or expected answer/retrieval-call fields are invalid.
+- Made `scripts/chat_agent.py` print the raw reply with `repr()` on this error, including after a RAG-assisted final reply fails; the HTTP chat API does not return the raw reply.
+- Added offline tests for the original reply on initial and post-retrieval errors, invalid answer and retrieval-call fields, terminal display, and exclusion from the HTTP error response.
+- Ran the full offline suite with 99 tests passing and one dependency deprecation warning.
+
+### Minimal browser chat UI
+
+- Added a standalone HTML, CSS, and JavaScript frontend under `src/web_ui/` with a large conversation area, a text input, and a send button.
+- Made the page send the full displayed history to `POST /api/chat`, render returned retrieval messages in yellow before the assistant reply, and keep history only in browser memory. Failed sends retain the draft for retry.
+- Documented separate local startup with Python's static HTTP server at `127.0.0.1:5173` and the API at `127.0.0.1:8000`, including `WEB_API_ALLOWED_ORIGINS` configuration.
+- Verified four offline Node tests for request history, response order, browser fetch binding, and failed-request handling; the Python suite remains at 99 passing tests with one dependency deprecation warning.
+- A browser smoke check with a local mock API displayed a direct reply and a retrieval message followed by an assistant reply; no real model call was made.
+
+### One-command local web startup
+
+- Added `scripts/run_web_ui.py` to launch the existing API and the Python static frontend server from one command in the active Python environment.
+- The launcher stops the other server if either exits and stops both on Ctrl+C; ports 8000 and 5173 must be available.
+- Added three offline launcher tests for both startup commands, Ctrl+C cleanup, early server exit, and partial startup failure. The full Python suite passes 102 tests with one dependency deprecation warning; the four Node frontend tests also pass.
+- A live combined-start check encountered an existing process on port 8000, so simultaneous startup was not verified on that port in this run.
+
+### Local web startup follow-up
+
+- The combined launcher now adds the local UI origin to the API child process's allowed origins, preserving other configured origins without editing `.env`.
+- Five offline launcher tests pass; the full Python suite has 104 passing tests with one dependency deprecation warning, and the four Node frontend tests pass. After the previous API process was stopped, a live combined startup served the UI and API with HTTP `200`, and the UI-origin CORS preflight returned `200`. No real model request was made.
+
+### Verified web launcher status and shutdown
+
+- Added `scripts/run.py` and made the combined launcher check ports, confirm both HTTP services and API browser access, then print the Web UI address only after all checks succeed.
+- Startup failure identifies the affected service; an occupied-port check starts no processes. A later service exit or Ctrl+C closes both launched processes. Interactive Windows failures remain visible until Enter is pressed.
+- Eight offline launcher tests pass, including the interactive Windows failure message. The full Python suite has 107 passing tests with one dependency deprecation warning, and the four Node frontend tests pass. A live launch reported both services ready, a second launch reported occupied ports, and Ctrl+C released ports 8000 and 5173. No real model request was made.
+
+### Simplified web launcher
+
+- Reduced `scripts/run_web_ui.py` to starting the API and static UI processes, printing the address, and stopping both on Ctrl+C or when either process exits. Removed port probes and HTTP and CORS health checks; the API child still allows the local UI origin.
+- Four focused launcher tests pass; the full Python suite has 103 passing tests with one dependency deprecation warning. The four Node frontend tests remain unchanged.
+- During a live check, another local process occupied port 8000. The simplified launcher exited and cleaned up its own UI process. The already-running UI and API returned HTTP `200`, including the browser-origin CORS preflight; no real model request was made.
+
+### Standalone English S17/G3 JSON preprocessing
+
+- Added `src/corpus_builder/split_pdf.py`, extracted from the original S17 splitting workflow, and `scripts/split_pdfs.py` to process both configured English PDFs with one command.
+- Retained `CorpusRecord` and the `id`, `text`, `metadata` JSON structure, including section context, source paths, starting pages, split tracking, word counts, and text hashes.
+- Added support for G3's different front-matter length, numbering without trailing periods, lettered headings identified from the contents, appendices A-D, and unlabelled appendix continuation pages. Preserved recognizable body titles where contents wording differs and prevented cross-references from changing chapter ownership.
+- Generated `data/processed/s17_en_chunks.json` with 224 records from 185 parent chunks, and `data/processed/g3_en_chunks.json` with 896 records from 172 parent chunks. S17 retains its original record IDs while the new parser removes wrapped running-header remnants and completes wrapped chapter titles.
+- Verified both local outputs for unique IDs, valid text hashes, preservation of every extracted parent passage through semantic subdivision, and a maximum of 220 English words in the generated passages. All 125 lettered G3 contents entries have corresponding section IDs.
+- Added eight offline preprocessing tests; the full Python suite passed with 111 tests and one existing dependency deprecation warning. No real embedding or generation API was called.
+- Added `data/processed/` to `.gitignore`. Source PDFs, the existing builder, and the vector database were not modified. JSON consumption by the builder remains a later refactor; table and diagram layout is not reconstructed, and split parts retain parent starting-page metadata.
+
+### Enable JSON mode for Agent replies
+
+- Added the optional `json_mode` keyword argument to `src/api/llm_api.py`; when enabled, the request includes `response_format={"type": "json_object"}`. Default text calls still use the existing behavior and return the model reply string.
+- Enabled JSON mode for both Agent model requests: the initial answer-or-retrieval decision and the final answer after retrieval. The existing prompt and field checks still define and validate `answer` and `tool_call`; JSON mode does not guarantee those fields or content correctness, and no JSON Schema constraints or automatic retries were added.
+- Verified 22 focused offline tests and the full Python suite with 113 passing tests and one existing dependency deprecation warning. Tests mock external services and cover optional request formatting, reply preservation, both Agent request stages, and rejection of invalid Agent fields.
+- A manual real request to `deepseek-ai/DeepSeek-V4-Flash` with the Agent prompt and a short greeting returned a parseable `answer` JSON object. No regulation retrieval was performed in that manual check.
+
+### Unified Agent response messages
+
+- Changed the Agent interface to `AgentService.respond(messages: list[Message]) -> list[Message]` and removed the `on_retrieval` callback. Direct answers return one `assistant` message; RAG-assisted answers return the retrieval `system` message followed by the `assistant` answer.
+- Updated the Web API to convert and return all Agent messages in order, and the terminal script to display them while retaining only user/assistant history. The frontend already appends every returned message; the HTTP request and response format remains unchanged.
+- Messages are delivered only after a successful response. A failure returns no partial retrieval messages and does not enter conversation history; existing error diagnosis and terminal raw-reply display are preserved.
+- Updated `docs/INTERFACE.md` and the offline tests. All 34 focused Python tests, all 115 Python tests, and five Node frontend tests pass, with one existing dependency deprecation warning in the Python suite. Tests cover message order, multiple returned messages, empty retrieval results, conversation isolation, and failed-turn handling; no real embedding or generation API was called.
+
+### Mandatory JSON model output
+
+- Simplified the model interface to `generate_messages(messages: list[Message]) -> str` by removing `json_mode`; every request now includes `response_format={"type": "json_object"}`. The `generate_text(text: str) -> str` helper uses the same mandatory JSON output.
+- Removed the option from Agent calls and test doubles, and updated `docs/INTERFACE.md`. The wrapper returns JSON reply text as a string; Agent continues parsing and validating `answer` and `tool_call` responses with the existing error diagnosis.
+- All 22 focused offline tests and all 114 Python tests pass, with one existing dependency deprecation warning in the full suite. Tests verify mandatory JSON request formatting, reply preservation, and both Agent request stages; no real embedding or generation API was called.
 
 ```markdown
 ## Update format

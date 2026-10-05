@@ -15,25 +15,26 @@ MODEL = "deepseek-ai/DeepSeek-V4-Flash"
 
 
 def generate_text(text: str) -> str:
-    """Send text to the model and return its reply."""
+    """Send text to the model and return its JSON reply text."""
     return generate_messages([Message(role="user", content=text)])
 
 
 def generate_messages(messages: list[Message]) -> str:
-    """Send chat messages to the model and return its reply."""
+    """Request JSON object output and return the model reply text."""
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
+    payload: dict[str, object] = {
+        "model": MODEL,
+        "messages": [
+            {"role": message.role, "content": message.content}
+            for message in messages
+        ],
+        "response_format": {"type": "json_object"},
+    }
 
     request = Request(
         API_URL,
-        data=json.dumps(
-            {
-                "model": MODEL,
-                "messages": [
-                    {"role": message.role, "content": message.content}
-                    for message in messages
-                ],
-            }
-        ).encode("utf-8"),
+        data=json.dumps(payload).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {os.environ['SILICONFLOW_API_KEY']}",
             "Content-Type": "application/json",

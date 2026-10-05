@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>安全合规助手</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script type="module" src="./app.mjs"></script>
+  </head>
+  <body>
+    <main class="chat">
+      <header class="chat__header">
+        <h1>安全合规助手</h1>
+        <p>S17 v8.2 · 简易对话界面</p>
+      </header>
+
+      <section id="conversation" class="conversation" aria-label="对话内容" aria-live="polite">
+        <p id="empty-state" class="empty-state">在下方输入问题，开始对话。</p>
+      </section>
+
+      <div class="composer">
+        <p id="error" class="error" role="alert"></p>
+        <form id="chat-form">
+          <label class="sr-only" for="message-input">输入消息</label>
+          <textarea id="message-input" rows="2" placeholder="输入消息……" required></textarea>
+          <button id="send-button" type="submit">发送</button>
+        </form>
+        <p class="hint">按 Enter 发送，Shift + Enter 换行</p>
+      </div>
+    </main>
+  </body>
+</html>

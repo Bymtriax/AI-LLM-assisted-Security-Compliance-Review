@@ -1,0 +1,167 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1f2937;
+  background: #f5f6f8;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 960px);
+  height: 100vh;
+  height: 100dvh;
+  margin: 0 auto;
+  background: #fff;
+  box-shadow: 0 0 24px rgb(0 0 0 / 5%);
+}
+
+.chat__header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.chat__header h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.chat__header p {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.conversation {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.empty-state {
+  margin: 20vh auto 0;
+  color: #6b7280;
+  text-align: center;
+}
+
+.message {
+  width: fit-content;
+  max-width: min(80%, 720px);
+  margin-bottom: 18px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #f3f4f6;
+}
+
+.message__label {
+  margin: 0 0 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.message__content {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.message--user {
+  margin-left: auto;
+  color: #fff;
+  background: #2563eb;
+}
+
+.message--system {
+  color: #713f12;
+  background: #fef3c7;
+}
+
+.composer {
+  padding: 14px 24px 18px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.composer form {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.composer textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 180px;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+}
+
+.composer textarea:focus {
+  border-color: #2563eb;
+  outline: 2px solid #bfdbfe;
+}
+
+.composer button {
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: #2563eb;
+  font: inherit;
+  cursor: pointer;
+}
+
+.composer button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.error {
+  margin: 0 0 8px;
+  color: #b91c1c;
+}
+
+.error:empty {
+  display: none;
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 600px) {
+  .chat__header,
+  .conversation,
+  .composer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .message {
+    max-width: 92%;
+  }
+}

@@ -8,7 +8,7 @@ __pycache__/
 *.py[cod]
 
 # Local/generated data
-exp/output/
+exp/
 tmp/
 
 # Private working notes (public documentation belongs in docs/)
@@ -19,6 +19,7 @@ AGENTS.md
 
 # Raw source documents: keep public provenance in project documentation
 data/raw/
+data/processed/
 
 # Logs
 *.log

@@ -9,7 +9,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
-from agent import AgentService
+from agent import AgentService, ModelResponseError
+from api import Message
 
 
 GREEN = "\033[32m"
@@ -20,6 +21,7 @@ RESET = "\033[0m"
 
 def main() -> None:
     agent = AgentService()
+    messages: list[Message] = []
     print("Chat with the security compliance Agent. Type exit or quit to stop.")
 
     while True:
@@ -34,16 +36,23 @@ def main() -> None:
         if not text:
             continue
 
-        previous_message_count = len(agent.messages)
+        current_messages = [*messages, Message(role="user", content=text)]
         try:
-            answer = agent.respond(text)
+            replies = agent.respond(current_messages)
         except Exception as error:
             print(f"Error: {error}")
+            if isinstance(error, ModelResponseError):
+                print(f"Raw model reply: {error.raw_response!r}")
         else:
-            for message in agent.messages[previous_message_count:]:
+            messages = [
+                *current_messages,
+                *(message for message in replies if message.role == "assistant"),
+            ]
+            for message in replies:
                 if message.role == "system":
-                    print(f"{YELLOW}System:{RESET} {message.content}")
-            print(f"{BLUE}Agent:{RESET} {answer}")
+                    print(f"{YELLOW}System: {message.content}{RESET}")
+                else:
+                    print(f"{BLUE}Agent:{RESET} {message.content}")
 
 
 if __name__ == "__main__":
